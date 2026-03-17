@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useMemo, useState } from "react";
-import { Donor, Event, Announcement, AartiTime } from "@/types/temple";
+import { Donor, Event, Announcement, AartiTime, TempleSettings } from "@/types/temple";
 
 type TempleHomeClientProps = {
   upcomingEvents: Event[];
@@ -11,6 +11,7 @@ type TempleHomeClientProps = {
   eventDonors: Donor[];
   announcements: Announcement[];
   aartiTimes: AartiTime[];
+  settings: TempleSettings;
 };
 
 function formatDate(value: string) {
@@ -34,6 +35,7 @@ export default function TempleHomeClient({
   eventDonors,
   announcements,
   aartiTimes,
+  settings,
 }: TempleHomeClientProps) {
   const [selectedEventId, setSelectedEventId] = useState<string>(upcomingEvents[0]?.id ?? "");
   const [donorView, setDonorView] = useState<"general" | "event">("general");
@@ -331,6 +333,21 @@ export default function TempleHomeClient({
             )}
           </div>
         )}
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-2 md:px-8">
+        <div className="rounded-3xl border border-amber-200 bg-white p-5 shadow-sm md:p-7">
+          <h2 className="text-2xl font-bold">Donate via UPI</h2>
+          <p className="mt-2 text-sm text-stone-600">You can send donation directly to below UPI IDs.</p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {settings.upiIds.map((upiId, index) => (
+              <div key={`upi-${index}`} className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-xs uppercase tracking-wide text-stone-500">UPI ID {index + 1}</p>
+                <p className="mt-1 font-semibold text-rose-700">{upiId}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-4 pb-14 pt-2 md:px-8">

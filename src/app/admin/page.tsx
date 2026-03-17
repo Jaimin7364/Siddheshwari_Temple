@@ -1,11 +1,26 @@
 "use client";
 
+import jsPDF from "jspdf";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ADMIN_PASSWORD } from "@/lib/admin-config";
-import { Donor, Event } from "@/types/temple";
+import { Donor, Event, TempleSettings } from "@/types/temple";
 
 type DonationType = "event" | "general";
 type DonationTiming = "before" | "after" | "general";
+
+type ReceiptData = {
+  receiptNo: string;
+  name: string;
+  address: string;
+  city: string;
+  mobile: string;
+  amount: number;
+  donationType: DonationType;
+  timing: DonationTiming;
+  eventName?: string;
+  upiId: string;
+  date: string;
+};
 
 export default function AdminPage() {
   const [password, setPassword] = useState("");
@@ -20,6 +35,25 @@ export default function AdminPage() {
   const [donors, setDonors] = useState<Donor[]>([]);
   const [editingEventId, setEditingEventId] = useState("");
   const [editingDonorId, setEditingDonorId] = useState("");
+  const [settings, setSettings] = useState<TempleSettings>({
+    upiIds: ["ravaly950@oksbi"],
+    templeName: "Siddheshwari Mataji Temple Rampura",
+    templeAddress: "Rampura, Gujarat, India",
+    thankYouNote:
+      "Thank you for your valuable donation. May Siddheshwari Mataji bless you and your family.",
+  });
+  const [receiptForm, setReceiptForm] = useState({
+    name: "",
+    address: "",
+    city: "",
+    mobile: "",
+    amount: "",
+    donationType: "general" as DonationType,
+    eventId: "",
+    timing: "general" as DonationTiming,
+    upiId: "ravaly950@oksbi",
+  });
+  const [lastReceipt, setLastReceipt] = useState<ReceiptData | null>(null);
 
   const [eventForm, setEventForm] = useState({
     name: "",
@@ -62,12 +96,23 @@ export default function AdminPage() {
     setDonors(data);
   }, []);
 
+  const fetchSettings = useCallback(async () => {
+    const response = await fetch("/api/settings");
+    const data = (await response.json()) as TempleSettings;
+    setSettings(data);
+    setReceiptForm((previous) => ({
+      ...previous,
+      upiId: previous.upiId || data.upiIds[0] || "ravaly950@oksbi",
+    }));
+  }, []);
+
   useEffect(() => {
     if (unlocked) {
       fetchEvents();
       fetchDonors();
+      fetchSettings();
     }
-  }, [fetchDonors, fetchEvents, unlocked]);
+  }, [fetchDonors, fetchEvents, fetchSettings, unlocked]);
 
   function handleUnlock(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -77,6 +122,7 @@ export default function AdminPage() {
       setMessage("Admin panel unlocked.");
       fetchEvents();
       fetchDonors();
+      fetchSettings();
       return;
     }
 
@@ -134,6 +180,182 @@ export default function AdminPage() {
 
     setMessage("Saved successfully.");
     return true;
+  }
+
+  function resetReceiptForm() {
+    setReceiptForm((previous) => ({
+      ...previous,
+      name: "",
+      address: "",
+      city: "",
+      mobile: "",
+      amount: "",
+      donationType: "general",
+      eventId: "",
+      timing: "general",
+    }));
+  }
+
+  function generateReceiptPdf(receipt: ReceiptData) {
+    const doc = new jsPDF();
+    let y = 18;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text(settings.templeName, 105, y, { align: "center" });
+    y += 8;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.text(settings.templeAddress, 105, y, { align: "center" });
+    y += 10;
+
+    doc.setDrawColor(180, 80, 80);
+    doc.line(15, y, 195, y);
+    y += 10;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text("Donation Receipt", 15, y);
+    y += 8;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.text(`Receipt No: ${receipt.receiptNo}`, 15, y);
+    doc.text(`Date: ${receipt.date}`, 140, y);
+    y += 8;
+
+    doc.text(`Donor Name: ${receipt.name}`, 15, y);
+    y += 7;
+    doc.text(`Mobile: ${receipt.mobile}`, 15, y);
+    y += 7;
+    doc.text(`Address: ${receipt.address}`, 15, y);
+    y += 7;
+    doc.text(`City/Village: ${receipt.city}`, 15, y);
+    y += 10;
+
+    doc.text(`Amount: Rs. ${receipt.amount.toLocaleString("en-IN")}`, 15, y);
+    y += 7;
+    doc.text(
+      `Donation Type: ${receipt.donationType === "event" ? "Event Donation" : "General Donation"}`,
+      15,
+      y,
+    );
+    y += 7;
+    doc.text(`Timing: ${receipt.timing}`, 15, y);
+    y += 7;
+    if (receipt.eventName) {
+      doc.text(`Event: ${receipt.eventName}`, 15, y);
+      y += 7;
+    }
+    doc.text(`UPI ID: ${receipt.upiId}`, 15, y);
+    y += 12;
+
+    const wrappedThankYou = doc.splitTextToSize(settings.thankYouNote, 180);
+    doc.text(wrappedThankYou, 15, y);
+    y += wrappedThankYou.length * 6 + 12;
+
+    doc.setFont("helvetica", "italic");
+    doc.text("With blessings from Siddheshwari Mataji Temple", 15, y);
+
+    doc.save(`receipt-${receipt.receiptNo}.pdf`);
+  }
+
+  function formatWhatsappNumber(raw: string) {
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length === 10) return `91${digits}`;
+    return digits;
+  }
+
+  function shareReceiptOnWhatsapp() {
+    if (!lastReceipt) return;
+
+    const mobile = formatWhatsappNumber(lastReceipt.mobile);
+    if (!mobile) {
+      setMessage("Invalid mobile number for WhatsApp sharing.");
+      return;
+    }
+
+    const text = [
+      `${settings.templeName}`,
+      `Receipt No: ${lastReceipt.receiptNo}`,
+      `Donor: ${lastReceipt.name}`,
+      `Amount: Rs. ${lastReceipt.amount.toLocaleString("en-IN")}`,
+      `Donation Type: ${lastReceipt.donationType === "event" ? "Event" : "General"}`,
+      lastReceipt.eventName ? `Event: ${lastReceipt.eventName}` : "",
+      settings.thankYouNote,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    window.open(`https://wa.me/${mobile}?text=${encodeURIComponent(text)}`, "_blank");
+  }
+
+  async function saveSettings(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const payload = {
+      ...settings,
+      upiIds: settings.upiIds.map((item) => item.trim()).filter(Boolean),
+    };
+
+    const ok = await saveRecord("PUT", "/api/settings", payload);
+    if (!ok) return;
+
+    await fetchSettings();
+  }
+
+  async function generateReceiptAndAddDonor(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+
+    if (!receiptForm.name || !receiptForm.address || !receiptForm.city || !receiptForm.mobile || !receiptForm.amount) {
+      setMessage("Please fill all receipt fields.");
+      return;
+    }
+
+    if (receiptForm.donationType === "event" && !receiptForm.eventId) {
+      setMessage("Please select event for event donation.");
+      return;
+    }
+
+    const selectedEvent = events.find((event) => event.id === receiptForm.eventId);
+    const amount = Number(receiptForm.amount);
+    const receiptNo = `SMT-${Date.now()}`;
+
+    const donorPayload = {
+      name: receiptForm.name,
+      city: receiptForm.city,
+      address: receiptForm.address,
+      mobile: receiptForm.mobile,
+      amount,
+      donationType: receiptForm.donationType,
+      eventId: receiptForm.donationType === "event" ? receiptForm.eventId : undefined,
+      timing: receiptForm.donationType === "event" ? receiptForm.timing : "general",
+      notes: `Receipt ${receiptNo}`,
+    };
+
+    const ok = await saveRecord("POST", "/api/donors", donorPayload);
+    if (!ok) return;
+
+    await fetchDonors();
+
+    const receiptData: ReceiptData = {
+      receiptNo,
+      name: receiptForm.name,
+      address: receiptForm.address,
+      city: receiptForm.city,
+      mobile: receiptForm.mobile,
+      amount,
+      donationType: receiptForm.donationType,
+      timing: receiptForm.donationType === "event" ? receiptForm.timing : "general",
+      eventName: selectedEvent?.name,
+      upiId: receiptForm.upiId,
+      date: new Date().toLocaleString("en-IN"),
+    };
+
+    generateReceiptPdf(receiptData);
+    setLastReceipt(receiptData);
+    resetReceiptForm();
+    setMessage("Receipt generated and donor added successfully.");
   }
 
   async function deleteRecord(url: string, payload: object, successMessage: string) {
@@ -382,6 +604,181 @@ export default function AdminPage() {
         </section>
 
         <section className="grid gap-6 md:grid-cols-2">
+          <form onSubmit={saveSettings} className="space-y-3 rounded-2xl bg-white p-5 shadow">
+            <h2 className="text-xl font-semibold">UPI & Receipt Settings</h2>
+            {settings.upiIds.map((upiId, index) => (
+              <div key={`upi-${index}`} className="flex gap-2">
+                <input
+                  className="w-full rounded border px-3 py-2"
+                  placeholder="UPI ID"
+                  value={upiId}
+                  onChange={(e) => {
+                    const copy = [...settings.upiIds];
+                    copy[index] = e.target.value;
+                    setSettings({ ...settings, upiIds: copy });
+                  }}
+                  required
+                />
+                {settings.upiIds.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const copy = settings.upiIds.filter((_, itemIndex) => itemIndex !== index);
+                      setSettings({ ...settings, upiIds: copy });
+                    }}
+                    className="rounded bg-rose-100 px-3 py-2 text-sm font-semibold text-rose-800"
+                  >
+                    Remove
+                  </button>
+                ) : null}
+              </div>
+            ))}
+
+            <button
+              type="button"
+              onClick={() => setSettings({ ...settings, upiIds: [...settings.upiIds, ""] })}
+              className="rounded border border-slate-300 px-4 py-2 font-semibold text-slate-700"
+            >
+              Add Another UPI
+            </button>
+
+            <input
+              className="w-full rounded border px-3 py-2"
+              placeholder="Temple Name"
+              value={settings.templeName}
+              onChange={(e) => setSettings({ ...settings, templeName: e.target.value })}
+              required
+            />
+            <input
+              className="w-full rounded border px-3 py-2"
+              placeholder="Temple Address"
+              value={settings.templeAddress}
+              onChange={(e) => setSettings({ ...settings, templeAddress: e.target.value })}
+              required
+            />
+            <textarea
+              className="w-full rounded border px-3 py-2"
+              placeholder="Thank you note"
+              value={settings.thankYouNote}
+              onChange={(e) => setSettings({ ...settings, thankYouNote: e.target.value })}
+              required
+            />
+            <button type="submit" className="rounded bg-rose-700 px-4 py-2 font-semibold text-white">
+              Save Settings
+            </button>
+          </form>
+
+          <form onSubmit={generateReceiptAndAddDonor} className="space-y-3 rounded-2xl bg-white p-5 shadow">
+            <h2 className="text-xl font-semibold">Generate Donation Receipt</h2>
+            <input
+              className="w-full rounded border px-3 py-2"
+              placeholder="Donor Name"
+              value={receiptForm.name}
+              onChange={(e) => setReceiptForm({ ...receiptForm, name: e.target.value })}
+              required
+            />
+            <input
+              className="w-full rounded border px-3 py-2"
+              placeholder="Address"
+              value={receiptForm.address}
+              onChange={(e) => setReceiptForm({ ...receiptForm, address: e.target.value })}
+              required
+            />
+            <input
+              className="w-full rounded border px-3 py-2"
+              placeholder="City / Village"
+              value={receiptForm.city}
+              onChange={(e) => setReceiptForm({ ...receiptForm, city: e.target.value })}
+              required
+            />
+            <input
+              className="w-full rounded border px-3 py-2"
+              placeholder="Mobile Number"
+              value={receiptForm.mobile}
+              onChange={(e) => setReceiptForm({ ...receiptForm, mobile: e.target.value })}
+              required
+            />
+            <input
+              className="w-full rounded border px-3 py-2"
+              type="number"
+              min="1"
+              placeholder="Amount"
+              value={receiptForm.amount}
+              onChange={(e) => setReceiptForm({ ...receiptForm, amount: e.target.value })}
+              required
+            />
+            <select
+              className="w-full rounded border px-3 py-2"
+              value={receiptForm.donationType}
+              onChange={(e) =>
+                setReceiptForm({
+                  ...receiptForm,
+                  donationType: e.target.value as DonationType,
+                  timing: e.target.value === "general" ? "general" : receiptForm.timing,
+                })
+              }
+            >
+              <option value="general">General Donation</option>
+              <option value="event">Event Donation</option>
+            </select>
+
+            {receiptForm.donationType === "event" ? (
+              <>
+                <select
+                  className="w-full rounded border px-3 py-2"
+                  value={receiptForm.eventId}
+                  onChange={(e) => setReceiptForm({ ...receiptForm, eventId: e.target.value })}
+                  required
+                >
+                  <option value="">Select Event</option>
+                  {eventOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="w-full rounded border px-3 py-2"
+                  value={receiptForm.timing}
+                  onChange={(e) => setReceiptForm({ ...receiptForm, timing: e.target.value as DonationTiming })}
+                >
+                  <option value="before">Before Event</option>
+                  <option value="after">After Event</option>
+                  <option value="general">General / Unknown</option>
+                </select>
+              </>
+            ) : null}
+
+            <select
+              className="w-full rounded border px-3 py-2"
+              value={receiptForm.upiId}
+              onChange={(e) => setReceiptForm({ ...receiptForm, upiId: e.target.value })}
+            >
+              {settings.upiIds.map((upiId, index) => (
+                <option key={`receipt-upi-${index}`} value={upiId}>
+                  {upiId}
+                </option>
+              ))}
+            </select>
+
+            <div className="flex gap-2">
+              <button type="submit" className="rounded bg-rose-700 px-4 py-2 font-semibold text-white">
+                Generate Receipt PDF
+              </button>
+              {lastReceipt ? (
+                <button
+                  type="button"
+                  onClick={shareReceiptOnWhatsapp}
+                  className="rounded bg-emerald-600 px-4 py-2 font-semibold text-white"
+                >
+                  Share on WhatsApp
+                </button>
+              ) : null}
+            </div>
+          </form>
+        </section>
+
+        <section className="grid gap-6 md:grid-cols-2">
           <div className="rounded-2xl bg-white p-5 shadow">
             <h2 className="text-xl font-semibold">Existing Events</h2>
             <div className="mt-3 space-y-2">
@@ -416,6 +813,7 @@ export default function AdminPage() {
                     <p className="text-xs text-slate-600">
                       {donor.city} | Rs. {donor.amount} | {donor.donationType}
                     </p>
+                    {donor.mobile ? <p className="text-xs text-slate-500">Mobile: {donor.mobile}</p> : null}
                   </div>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => startEditDonor(donor)} className="rounded bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800">

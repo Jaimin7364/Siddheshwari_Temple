@@ -14,12 +14,21 @@ export type Donor = {
   id: string;
   name: string;
   city: string;
+  address?: string;
+  mobile?: string;
   amount: number;
   donationType: "event" | "general";
   eventId?: string;
   timing: DonationTiming;
   notes?: string;
   donatedAt: string;
+};
+
+export type TempleSettings = {
+  upiIds: string[];
+  templeName: string;
+  templeAddress: string;
+  thankYouNote: string;
 };
 
 export type Announcement = {
@@ -41,4 +50,5 @@ export type TempleData = {
   donors: Donor[];
   announcements: Announcement[];
   aartiTimes: AartiTime[];
+  settings: TempleSettings;
 };

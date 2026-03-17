@@ -17,5 +17,13 @@
       "time": "07:00 PM",
       "notes": "Dar roj sanje"
     }
-  ]
+  ],
+  "settings": {
+    "upiIds": [
+      "ravaly950@oksbi"
+    ],
+    "templeName": "Siddheshwari Mataji Temple Rampura",
+    "templeAddress": "Rampura, Gujarat, India",
+    "thankYouNote": "Thank you for your valuable donation. May Siddheshwari Mataji bless you and your family."
+  }
 }

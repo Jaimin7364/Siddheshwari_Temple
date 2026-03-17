@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { kv } from "@vercel/kv";
 import { Redis } from "@upstash/redis";
-import { TempleData } from "@/types/temple";
+import { TempleData, TempleSettings } from "@/types/temple";
 
 const DATA_FILE_PATH = path.join(process.cwd(), "src", "data", "temple-data.json");
 const KV_DATA_KEY = "temple:data";
@@ -14,29 +14,56 @@ const hasUpstashConfig = Boolean(
 
 const upstashRedis = hasUpstashConfig ? Redis.fromEnv() : null;
 
+export const defaultTempleSettings: TempleSettings = {
+  upiIds: ["ravaly950@oksbi"],
+  templeName: "Siddheshwari Mataji Temple Rampura",
+  templeAddress: "Rampura, Gujarat, India",
+  thankYouNote:
+    "Thank you for your valuable donation. May Siddheshwari Mataji bless you and your family.",
+};
+
 function createEmptyData(): TempleData {
   return {
     events: [],
     donors: [],
     announcements: [],
     aartiTimes: [],
+    settings: defaultTempleSettings,
+  };
+}
+
+function normalizeTempleData(input: TempleData): TempleData {
+  return {
+    ...input,
+    events: input.events ?? [],
+    donors: input.donors ?? [],
+    announcements: input.announcements ?? [],
+    aartiTimes: input.aartiTimes ?? [],
+    settings: {
+      ...defaultTempleSettings,
+      ...(input.settings ?? {}),
+      upiIds:
+        input.settings?.upiIds && input.settings.upiIds.length > 0
+          ? input.settings.upiIds
+          : defaultTempleSettings.upiIds,
+    },
   };
 }
 
 export async function readTempleData(): Promise<TempleData> {
   if (hasKvConfig) {
     const data = await kv.get<TempleData>(KV_DATA_KEY);
-    return data ?? createEmptyData();
+    return data ? normalizeTempleData(data) : createEmptyData();
   }
 
   if (upstashRedis) {
     const data = await upstashRedis.get<TempleData>(KV_DATA_KEY);
-    return data ?? createEmptyData();
+    return data ? normalizeTempleData(data) : createEmptyData();
   }
 
   try {
     const fileContent = await fs.readFile(DATA_FILE_PATH, "utf-8");
-    return JSON.parse(fileContent) as TempleData;
+    return normalizeTempleData(JSON.parse(fileContent) as TempleData);
   } catch {
     return createEmptyData();
   }

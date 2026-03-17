@@ -27,6 +27,7 @@ export default async function Home() {
       eventDonors={eventDonors}
       announcements={data.announcements}
       aartiTimes={data.aartiTimes}
+      settings={data.settings}
     />
   );
 }
