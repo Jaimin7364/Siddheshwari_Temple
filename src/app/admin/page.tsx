@@ -64,7 +64,6 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (unlocked) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchEvents();
       fetchDonors();
     }
@@ -84,21 +83,52 @@ export default function AdminPage() {
     setMessage("Wrong password.");
   }
 
+  async function requestWithFeedback(method: "POST" | "PUT" | "DELETE", url: string, payload: object) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-password": ADMIN_PASSWORD,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        try {
+          const error = (await response.json()) as { message?: string };
+          return { ok: false, message: error.message ?? "Request failed." };
+        } catch {
+          const text = await response.text();
+          return { ok: false, message: text || "Request failed." };
+        }
+      }
+
+      return { ok: true, message: "Success" };
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return {
+          ok: false,
+          message: "Request timed out. Check Vercel server logs/storage setup.",
+        };
+      }
+
+      return { ok: false, message: "Network error. Please try again." };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   async function saveRecord(method: "POST" | "PUT", url: string, payload: object) {
     setMessage("Saving...");
 
-    const response = await fetch(url, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        "x-admin-password": ADMIN_PASSWORD,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const error = (await response.json()) as { message?: string };
-      setMessage(error.message ?? "Failed to save.");
+    const result = await requestWithFeedback(method, url, payload);
+    if (!result.ok) {
+      setMessage(result.message);
       return false;
     }
 
@@ -109,18 +139,9 @@ export default function AdminPage() {
   async function deleteRecord(url: string, payload: object, successMessage: string) {
     setMessage("Deleting...");
 
-    const response = await fetch(url, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        "x-admin-password": ADMIN_PASSWORD,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const error = (await response.json()) as { message?: string };
-      setMessage(error.message ?? "Failed to delete.");
+    const result = await requestWithFeedback("DELETE", url, payload);
+    if (!result.ok) {
+      setMessage(result.message);
       return false;
     }
 
