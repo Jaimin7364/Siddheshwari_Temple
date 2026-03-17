@@ -1,0 +1,21 @@
+{
+  "events": [],
+  "donors": [],
+  "announcements": [
+    
+  ],
+  "aartiTimes": [
+    {
+      "id": "aarti-1",
+      "name": "Morning Aarti",
+      "time": "06:30 AM",
+      "notes": "Dar roj savare"
+    },
+    {
+      "id": "aarti-2",
+      "name": "Evening Aarti",
+      "time": "07:00 PM",
+      "notes": "Dar roj sanje"
+    }
+  ]
+}
