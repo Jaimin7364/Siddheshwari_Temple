@@ -16,6 +16,31 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## SEO Sitemap Setup
+
+This project now includes Next.js metadata routes:
+
+- `/sitemap.xml`
+- `/robots.txt`
+
+Required for correct production sitemap URLs:
+
+1. Set `NEXT_PUBLIC_SITE_URL` in your environment, for example:
+
+```bash
+NEXT_PUBLIC_SITE_URL=https://your-domain.com
+```
+
+Optional fallback env vars supported by the app:
+
+- `SITE_URL`
+- `VERCEL_PROJECT_PRODUCTION_URL`
+- `VERCEL_URL`
+
+Sitemap includes all app pages and `robots.txt` blocks crawler access to API paths:
+
+- `/api`
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
